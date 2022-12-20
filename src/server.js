@@ -98,10 +98,8 @@ app.post("/urls/shorten", async (req, res) => {
     const token = authorization?.replace("Bearer ", "").replace(/"/g, " ").trim();
     const shortUrl = nanoid(8)
     if (!token) {
-        console.log("Entrei")
         return res.sendStatus(401);
     }
-
     const validation = urlSchema.validate({
         url
     }, { abortEarly: false });
@@ -165,6 +163,122 @@ app.get("/urls/open/:shortUrl", async (req, res) => {
             res.status(302).redirect(url.rows[0].url)
         }
     } catch (err) {
+        console.log(err);
+        res.sendStatus(500);
+    }
+});
+
+app.delete("/urls/:id", async(req, res) => {
+    const { authorization } = req.headers;
+    const id = parseInt(req.params.id);
+    
+    const token = authorization?.replace("Bearer ", "").replace(/"/g, " ").trim();
+    
+    if (isNaN(id)) {
+        return res.sendStatus(400);
+    }
+    if (!token) {
+        return res.sendStatus(401);
+    }
+
+    try{
+        const user = await connectionDB.query(`SELECT * FROM sessions WHERE token = $1`, [token]);
+        const url = await connectionDB.query(`SELECT * FROM urls WHERE id = $1`, [id]);
+        if(!url.rows.length){
+            return res.sendStatus(404);
+        }
+        if(user.rows[0].userId === url.rows[0].userId){
+            await connectionDB.query(`DELETE FROM urls WHERE id = $1`, [id])
+            return res.sendStatus(204);
+        }else{
+            return res.sendStatus(401);
+        }
+    }catch(err){
+        console.log(err);
+        res.sendStatus(500);
+    }
+});
+
+app.get("/users/me", async(req, res) => {
+    const arr = [];
+    const { authorization } = req.headers;
+    const token = authorization?.replace("Bearer ", "").replace(/"/g, " ").trim();
+    if (!token) {
+        return res.sendStatus(401);
+    }
+    try{
+        const user = await connectionDB.query(`SELECT * FROM sessions WHERE token = $1`, [token]);
+        const url = await connectionDB.query(`SELECT * FROM urls WHERE "userId" = $1`, [user.rows[0].userId]);
+        if(url.rows.length){
+            const urlsUser = await connectionDB.query(`SELECT urls."userId" AS id,"signUp".name AS name, SUM("visitCount") AS "visitCount" FROM urls JOIN "signUp" ON urls."userId" = "signUp".id GROUP BY "signUp".name, urls."userId";`)
+            const filter = urlsUser.rows.filter(url => url.id === user.rows[0].userId);
+            url.rows.forEach((item) => {
+                delete item.userId
+                delete item.createdAt
+                arr.push(item)
+            });
+            const objUser = {
+                id: filter[0].id,
+                name: filter[0].name,
+                visitCount: filter[0].visitCount,
+                shortenedUrls: arr
+            }
+            return res.status(200).send(objUser)
+        }else{
+            const urlsUser = await connectionDB.query(`SELECT "userId" AS id, "signUp".name AS name FROM sessions JOIN "signUp" ON sessions."userId" = "signUp".id;`)
+            const filterUser = urlsUser.rows.filter(url => url.id === user.rows[0].userId);
+            
+            const objUser = {
+                id: filterUser[0].id,
+                name: filterUser[0].name,
+                visitCount: 0,
+                shortenedUrls: arr
+            }
+            return res.status(200).send(objUser)
+
+        }
+        
+    }catch(err){
+        console.log(err);
+        res.sendStatus(500);
+    }
+});
+
+app.get("/ranking", async(req, res) => {
+    const arr = [];
+    try{
+        const urlsUser = await connectionDB.query(`SELECT "userId" AS id, "signUp".name AS name FROM sessions JOIN "signUp" ON sessions."userId" = "signUp".id;`)
+        const url = await connectionDB.query(`SELECT * FROM urls`);
+        const urlsUser1 = await connectionDB.query(`SELECT urls."userId" AS id,"signUp".name AS name, SUM("visitCount") AS "visitCount" FROM urls JOIN "signUp" ON urls."userId" = "signUp".id GROUP BY "signUp".name, urls."userId";`)
+        const countLinks = url.rows.map((link) => link.userId);
+        
+        for(let i = 0; i < urlsUser.rows.length; i++){
+            const item = urlsUser.rows[i];
+            const item2 = url.rows[i];            
+            if(countLinks.includes(item.id)){
+                let filterVisitCount = urlsUser1.rows.filter(id => id.id === item.id)
+                let filterLink = countLinks.filter(link => link === item.id)
+                
+                const objRank = {
+                    id: item.id,
+                    name: item.name,
+                    linksCount: filterLink.length,
+                    visitCount: filterVisitCount[0].visitCount                    
+                }
+                arr.push(objRank)
+            }else{
+                const objRank = {
+                    id: item.id,
+                    name: item.name,
+                    linksCount: 0,
+                    visitCount: 0,
+                                       
+                }
+                arr.push(objRank)
+            }
+        }
+        res.status(200).send(arr)        
+    }catch(err){
         console.log(err);
         res.sendStatus(500);
     }
