@@ -254,7 +254,7 @@ app.get("/ranking", async(req, res) => {
         
         for(let i = 0; i < urlsUser.rows.length; i++){
             const item = urlsUser.rows[i];
-            const item2 = url.rows[i];            
+                       
             if(countLinks.includes(item.id)){
                 let filterVisitCount = urlsUser1.rows.filter(id => id.id === item.id)
                 let filterLink = countLinks.filter(link => link === item.id)
@@ -277,7 +277,9 @@ app.get("/ranking", async(req, res) => {
                 arr.push(objRank)
             }
         }
-        res.status(200).send(arr)        
+        res.status(200).send(arr.slice(0,10).sort((a, b) => {
+            return a.visitCount > b.visitCount ? -1 : a.visitCount < b.visitCount ? 1 : 0; 
+        }))        
     }catch(err){
         console.log(err);
         res.sendStatus(500);
