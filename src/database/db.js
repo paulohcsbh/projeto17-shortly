@@ -1,6 +1,6 @@
 import pkg from "pg";
 import dotenv from "dotenv";
-dotenv.config();
+dotenv.config({path: "../.env"});
 
 const { Pool } = pkg;
 export const connectionDB = new Pool({
