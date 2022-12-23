@@ -64,7 +64,7 @@ export async function signOut(req, res){
             return res.sendStatus(409);
         }
         await connectionDB.query(`DELETE FROM sessions WHERE "userId" = $1`, [user.rows[0].userId]);
-        res.sendStatus(200);
+        res.sendStatus(204);
     } catch (err) {
         console.log(err);
         res.sendStatus(500);
